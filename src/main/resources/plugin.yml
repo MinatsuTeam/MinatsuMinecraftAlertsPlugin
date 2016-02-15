@@ -1,0 +1,4 @@
+name: MinatsuMinecraftAlerts
+version: 0.0.1
+author: tryy3
+main: us.tryy3.spigot.plugins.minatsuminecraftalertsplugin.Alerts
