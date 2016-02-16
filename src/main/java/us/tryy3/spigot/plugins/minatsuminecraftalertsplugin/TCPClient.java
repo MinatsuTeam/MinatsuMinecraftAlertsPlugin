@@ -8,9 +8,11 @@ import com.sun.management.OperatingSystemMXBean;
 import net.minecraft.server.v1_8_R3.MinecraftServer;
 
 import java.io.DataInputStream;
+import java.io.File;
 import java.io.PrintWriter;
 import java.lang.management.ManagementFactory;
 import java.net.Socket;
+import java.util.regex.Pattern;
 
 /**
  * Created by tryy3 on 2016-02-15.
@@ -80,53 +82,76 @@ public class TCPClient extends Thread {
                                     //obj.addProperty();
                                     break;
                                 case 1:
-                                    if (object.get("side").getAsBoolean()) {
-                                        boolean side = object.get("side").getAsBoolean();
-                                        JsonObject max = new JsonObject();
-                                        JsonObject total = new JsonObject();
-                                        JsonObject free = new JsonObject();
+                                    boolean side = object.get("side").getAsBoolean();
+                                    JsonObject max = new JsonObject();
+                                    JsonObject total = new JsonObject();
+                                    JsonObject free = new JsonObject();
 
-                                        max.addProperty("channel", object.get("channel").getAsString());
-                                        total.addProperty("channel", object.get("channel").getAsString());
-                                        free.addProperty("channel", object.get("channel").getAsString());
+                                    max.addProperty("channel", object.get("channel").getAsString());
+                                    total.addProperty("channel", object.get("channel").getAsString());
+                                    free.addProperty("channel", object.get("channel").getAsString());
 
 
-                                        OperatingSystemMXBean OSMXBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+                                    OperatingSystemMXBean OSMXBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
 
-                                        max.addProperty("message", String.format("Maximum memory: %s MB", (side) ?
-                                                Runtime.getRuntime().maxMemory() / 1024 / 1024 :
-                                                OSMXBean.getTotalPhysicalMemorySize() / 1024 / 1024));
+                                    max.addProperty("message", String.format("Maximum memory: %s MB", (side) ?
+                                            Runtime.getRuntime().maxMemory() / 1024 / 1024 :
+                                            OSMXBean.getTotalPhysicalMemorySize() / 1024 / 1024));
 
-                                        total.addProperty("message", String.format("%s memory: %s MB", (side) ? "Allocated" : "Used", (side) ?
-                                                Runtime.getRuntime().totalMemory() / 1024 / 1024 :
-                                                (OSMXBean.getTotalPhysicalMemorySize() - OSMXBean.getFreePhysicalMemorySize()) / 1024 / 1024));
+                                    total.addProperty("message", String.format("%s memory: %s MB", (side) ? "Allocated" : "Used", (side) ?
+                                            Runtime.getRuntime().totalMemory() / 1024 / 1024 :
+                                            (OSMXBean.getTotalPhysicalMemorySize() - OSMXBean.getFreePhysicalMemorySize()) / 1024 / 1024));
 
-                                        free.addProperty("message", String.format("Free memory: %s MB", (side) ?
-                                                Runtime.getRuntime().freeMemory() / 1024 / 1024 :
-                                                OSMXBean.getFreePhysicalMemorySize()));
+                                    free.addProperty("message", String.format("Free memory: %s MB", (side) ?
+                                            Runtime.getRuntime().freeMemory() / 1024 / 1024 :
+                                            OSMXBean.getFreePhysicalMemorySize()));
 
-                                        outArray.add(max);
-                                        outArray.add(total);
-                                        outArray.add(free);
-                                    }
+                                    outArray.add(max);
+                                    outArray.add(total);
+                                    outArray.add(free);
                                     break;
                                 case 2:
+                                    if (object.get("side").getAsBoolean()) {
+                                        JsonObject pluginFolder = new JsonObject();
+                                        JsonObject serverFolder = new JsonObject();
+
+                                        pluginFolder.addProperty("channel", object.get("channel").getAsString());
+                                        serverFolder.addProperty("channel", object.get("channel").getAsString());
+
+                                        pluginFolder.addProperty("message", String.format("Plugin folder: %s MB",
+                                                getSize(alerts.getDataFolder().getParentFile(), null) / 1024 / 1024));
+
+                                        serverFolder.addProperty("message", String.format("Server folder: %s MB",
+                                                getSize(alerts.getServer().getWorldContainer(), null) / 1024 / 1024));
+
+                                        outArray.add(pluginFolder);
+                                        outArray.add(serverFolder);
+                                    } else {
+                                        JsonObject disk = new JsonObject();
+                                    }
                                     break;
                                 case 3:
                                     break;
-                            }
-
-                            if (object.get("side").getAsBoolean()) {
-                                // Front
-
-
-                            } else {
-                                // Back
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+
+    private long getSize(File file, Pattern pattern) {
+
+        int size = 0;
+        for (File f : file.listFiles()) {
+            if (f.isFile()) {
+                if (pattern != null && (pattern.matcher(f.getName())).find()) continue;
+                size+=f.length();
+            } else {
+                size+=getSize(f, pattern);
+            }
+        }
+        return size;
     }
 }
