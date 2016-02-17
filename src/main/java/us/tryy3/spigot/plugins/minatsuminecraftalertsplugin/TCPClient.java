@@ -7,9 +7,7 @@ import com.google.gson.JsonParser;
 import com.sun.management.OperatingSystemMXBean;
 import net.minecraft.server.v1_8_R3.MinecraftServer;
 
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.PrintWriter;
+import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.net.Socket;
 import java.util.regex.Pattern;
@@ -23,13 +21,29 @@ public class TCPClient extends Thread {
     String ip;
     Alerts alerts;
     PrintWriter out;
-    DataInputStream in;
+    BufferedReader in;
     boolean connected = false;
 
     public TCPClient(Alerts alerts) {
         this.alerts = alerts;
         this.port = alerts.getConfig().getInt("TCP-PORT");
         this.ip = alerts.getConfig().getString("TCP-IP");
+        connect();
+    }
+
+    private void connect() {
+        try {
+            System.out.println("Connecting to " + ip + ":" + port);
+            socket = new Socket(ip, port);
+
+            System.out.println("Connected.");
+            out = new PrintWriter(socket.getOutputStream());
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            connected = false;
+        } catch (IOException e) {
+            System.out.println("Connection failed");
+            connect();
+        }
     }
 
     @Override
@@ -37,23 +51,18 @@ public class TCPClient extends Thread {
         while (true)
         {
             try {
-                System.out.println("Connecting to " + ip + ":" + port);
-                socket = new Socket(ip, port);
-
-                System.out.println("Connected.");
-
                 while(true) {
-                    out = new PrintWriter(socket.getOutputStream());
+                    System.out.println(connected);
 
                     if (!connected) {
                         JsonObject obj = new JsonObject();
                         obj.addProperty("status", "connection");
-                        obj.addProperty("name", alerts.getConfig().getInt("Server-Name"));
-                        out.println(obj.toString());
+                        obj.addProperty("name", alerts.getConfig().getString("Server-Name"));
+                        out.println(obj.toString() + "\n");
                         connected = true;
                     }
 
-                    in = new DataInputStream(socket.getInputStream());
+                    System.out.println(out);
                     String msg = in.readLine();
 
                     JsonObject json = new JsonParser().parse(msg).getAsJsonObject();
@@ -127,15 +136,40 @@ public class TCPClient extends Thread {
                                         outArray.add(pluginFolder);
                                         outArray.add(serverFolder);
                                     } else {
-                                        JsonObject disk = new JsonObject();
+                                        File[] roots = File.listRoots();
+
+                                        for (File root : roots) {
+                                            if (root.getTotalSpace() == 0) continue;
+
+                                            JsonObject disk = new JsonObject();
+
+                                            disk.addProperty("channel", object.get("channel").getAsString());
+                                            disk.addProperty("message", String.format("File system %s: %s GB free of %s GB (%s GB left)",
+                                                    root.getAbsoluteFile(),
+                                                    root.getFreeSpace(),
+                                                    root.getTotalSpace(),
+                                                    root.getUsableSpace()));
+                                            outArray.add(disk);
+                                        }
                                     }
                                     break;
                                 case 3:
+                                    if (object.get("side").getAsBoolean()) {
+                                        JsonObject uptime = new JsonObject();
+                                        uptime.addProperty("channel", object.get("channel").getAsString());
+                                        uptime.addProperty("message", String.format("%s uptime: %s",
+                                                alerts.getConfig().getString("Server-Name"),
+                                                DateUtils.formatDateDiff(ManagementFactory.getRuntimeMXBean().getStartTime())));
+                                        outArray.add(uptime);
+                                    }
                                     break;
                             }
                         }
                     }
                 }
+            } catch (IOException e) {
+                System.out.println("Connection interrupted.");
+                connect();
             }
         }
     }
